@@ -45,6 +45,13 @@ from sp500_momentum.factor_attribution import (
     plot_correlation_matrix,
     plot_sector_breakdown
 )
+from sp500_momentum.oos_validation import (
+    run_oos_validation,
+    run_walk_forward_analysis,
+    plot_oos_comparison,
+    plot_walk_forward_equity,
+    plot_regime_analysis
+)
 
 
 def run_screen_mode(args):
@@ -368,12 +375,15 @@ Examples:
   
   python main.py --mode factor-attribution
       Analyze sector exposure and alpha attribution
+  
+  python main.py --mode oos-validation
+      Run out-of-sample validation and walk-forward analysis
         """
     )
     
     parser.add_argument(
         '--mode', '-m',
-        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis', 'monte-carlo', 'sensitivity', 'factor-attribution'],
+        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis', 'monte-carlo', 'sensitivity', 'factor-attribution', 'oos-validation'],
         required=True,
         help="Operation mode"
     )
@@ -455,6 +465,8 @@ Examples:
         run_sensitivity_mode(args)
     elif args.mode == 'factor-attribution':
         run_factor_attribution_mode(args)
+    elif args.mode == 'oos-validation':
+        run_oos_validation_mode(args)
 
 
 def run_sensitivity_mode(args):
@@ -612,6 +624,88 @@ def run_factor_attribution_mode(args):
     print(f"\nDiversification: {results['diversification_warning']}")
     print(f"\nCharts saved to: output/attribution_*.png")
     print(f"Analysis saved to: {csv_path}")
+
+
+def run_oos_validation_mode(args):
+    """Run out-of-sample validation and walk-forward analysis."""
+    print("\n" + "="*70)
+    print("OUT-OF-SAMPLE VALIDATION & WALK-FORWARD ANALYSIS")
+    print("="*70)
+    
+    # Run OOS validation (IS vs OOS comparison)
+    print("\nPart 1: Holdout Test (IS 2021-2025 vs OOS 2015-2019)...")
+    validation_results = run_oos_validation(
+        is_years=[2021, 2022, 2023, 2024, 2025],
+        oos_years=[2015, 2016, 2017, 2018, 2019],
+        lookback_years=args.lookback,
+        top_n=args.top_n,
+        workers=args.workers,
+        show_progress=True
+    )
+    
+    # Run walk-forward analysis
+    print("\n\nPart 2: Walk-Forward Analysis (2015-2025)...")
+    wf_results = run_walk_forward_analysis(
+        start_year=2010,
+        end_year=2025,
+        lookback_years=args.lookback,
+        top_n=args.top_n,
+        workers=args.workers,
+        show_progress=True
+    )
+    
+    # Generate visualizations
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # OOS comparison chart
+    oos_path = OUTPUT_DIR / "oos_comparison.png"
+    plot_oos_comparison(
+        validation_results,
+        title="In-Sample vs Out-of-Sample Performance",
+        save_path=str(oos_path),
+        show=not args.no_show
+    )
+    
+    # Walk-forward equity curve
+    wf_path = OUTPUT_DIR / "walk_forward_equity.png"
+    plot_walk_forward_equity(
+        wf_results,
+        title="Walk-Forward Analysis: Equity Curve (2015-2025)",
+        save_path=str(wf_path),
+        show=not args.no_show
+    )
+    
+    # Regime analysis
+    if validation_results['regime_analysis']:
+        regime_path = OUTPUT_DIR / "regime_analysis.png"
+        plot_regime_analysis(
+            validation_results['regime_analysis'],
+            title="OOS Performance by Market Regime",
+            save_path=str(regime_path),
+            show=not args.no_show
+        )
+    
+    print(f"\n\n{'='*70}")
+    print("OOS VALIDATION COMPLETE")
+    print(f"{'='*70}")
+    print(f"\nHoldout Test Summary:")
+    print(f"  IS Avg Alpha:  {validation_results['is_avg_alpha']*100:+.2f}%")
+    print(f"  OOS Avg Alpha: {validation_results['oos_avg_alpha']*100:+.2f}%")
+    print(f"  Degradation:   {validation_results['alpha_degradation']*100:+.2f}%")
+    
+    if validation_results['kw_pvalue'] is not None:
+        print(f"\nKruskal-Wallis Test (p={validation_results['kw_pvalue']:.4f}):")
+        if validation_results['same_distribution']:
+            print(f"  PASS: IS and OOS returns from SAME distribution (p > 0.05)")
+        else:
+            print(f"  FAIL: IS and OOS returns from DIFFERENT distributions")
+    
+    print(f"\nWalk-Forward Summary ({wf_results['n_years']} years):")
+    print(f"  CAGR:      {wf_results['cagr']*100:.2f}%")
+    print(f"  Win Rate:  {wf_results['win_rate']*100:.0f}%")
+    print(f"  Avg Alpha: {wf_results['avg_alpha']*100:+.2f}%")
+    
+    print(f"\nCharts saved to: output/oos_*.png, output/walk_forward_*.png")
 
 
 if __name__ == "__main__":

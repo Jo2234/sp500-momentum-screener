@@ -37,8 +37,15 @@ from .factor_attribution import (
     plot_correlation_matrix,
     plot_sector_breakdown
 )
+from .oos_validation import (
+    run_oos_validation,
+    run_walk_forward_analysis,
+    plot_oos_comparison,
+    plot_walk_forward_equity,
+    plot_regime_analysis
+)
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 __all__ = [
     "get_constituents_at_date",
     "download_historical_constituents",

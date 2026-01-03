@@ -39,6 +39,12 @@ from sp500_momentum.sensitivity_analysis import (
     plot_sensitivity_heatmap,
     plot_stock_stability
 )
+from sp500_momentum.factor_attribution import (
+    run_factor_attribution,
+    plot_waterfall_attribution,
+    plot_correlation_matrix,
+    plot_sector_breakdown
+)
 
 
 def run_screen_mode(args):
@@ -359,12 +365,15 @@ Examples:
   
   python main.py --mode sensitivity
       Run parameter sensitivity analysis to test strategy robustness
+  
+  python main.py --mode factor-attribution
+      Analyze sector exposure and alpha attribution
         """
     )
     
     parser.add_argument(
         '--mode', '-m',
-        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis', 'monte-carlo', 'sensitivity'],
+        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis', 'monte-carlo', 'sensitivity', 'factor-attribution'],
         required=True,
         help="Operation mode"
     )
@@ -444,6 +453,8 @@ Examples:
         run_monte_carlo_mode(args)
     elif args.mode == 'sensitivity':
         run_sensitivity_mode(args)
+    elif args.mode == 'factor-attribution':
+        run_factor_attribution_mode(args)
 
 
 def run_sensitivity_mode(args):
@@ -517,6 +528,90 @@ def run_sensitivity_mode(args):
     print(f"\nHigh-Conviction Stocks: {results['high_conviction_stocks']}")
     print(f"\nCharts saved to: output/sensitivity_*.png")
     print(f"Results saved to: {csv_path}")
+
+
+def run_factor_attribution_mode(args):
+    """Run factor attribution and sector analysis."""
+    analysis_year = date.today().year
+    reference_year = analysis_year - 1  # Use previous year for attribution
+    
+    print("\n" + "="*70)
+    print("FACTOR ATTRIBUTION & SECTOR ANALYSIS")
+    print("="*70)
+    
+    # First, get the current top stocks
+    print(f"\nStep 1: Getting top {args.top_n} momentum stocks...")
+    top_stocks, benchmark_returns, summary_df = run_momentum_screen(
+        analysis_date=date.today(),
+        lookback_years=args.lookback,
+        top_n=args.top_n,
+        workers=args.workers,
+        show_progress=True
+    )
+    
+    if not top_stocks:
+        print("No stocks passed the screening filter!")
+        return
+    
+    selected_tickers = [t[0] for t in top_stocks]
+    
+    # Run factor attribution on previous year
+    print(f"\nStep 2: Running factor attribution for {reference_year}...")
+    results = run_factor_attribution(
+        tickers=selected_tickers,
+        year=reference_year,
+        workers=args.workers,
+        show_progress=True
+    )
+    
+    if 'error' in results:
+        print(f"Error: {results['error']}")
+        return
+    
+    # Generate visualizations
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Waterfall chart
+    waterfall_path = OUTPUT_DIR / f"attribution_waterfall_{reference_year}.png"
+    plot_waterfall_attribution(
+        results,
+        title=f"Alpha Attribution Waterfall ({reference_year})",
+        save_path=str(waterfall_path),
+        show=not args.no_show
+    )
+    
+    # Correlation matrix
+    corr_path = OUTPUT_DIR / f"attribution_correlation_{reference_year}.png"
+    plot_correlation_matrix(
+        results['correlation_matrix'],
+        title=f"Portfolio Correlation Matrix ({reference_year})",
+        save_path=str(corr_path),
+        show=not args.no_show
+    )
+    
+    # Sector breakdown
+    breakdown_path = OUTPUT_DIR / f"attribution_breakdown_{reference_year}.png"
+    plot_sector_breakdown(
+        results['analysis_df'],
+        title=f"Sector Attribution Breakdown ({reference_year})",
+        save_path=str(breakdown_path),
+        show=not args.no_show
+    )
+    
+    # Save analysis to CSV
+    csv_path = OUTPUT_DIR / f"attribution_analysis_{reference_year}.csv"
+    results['analysis_df'].to_csv(csv_path, index=False)
+    
+    print(f"\n\n{'='*70}")
+    print("FACTOR ATTRIBUTION COMPLETE")
+    print(f"{'='*70}")
+    print(f"\nAlpha Decomposition:")
+    print(f"  Total Alpha:       {results['total_alpha']*100:+.2f}%")
+    print(f"  Sector Timing:     {results['sector_timing_alpha']*100:+.2f}%")
+    print(f"  Stock Selection:   {results['stock_selection_alpha']*100:+.2f}%")
+    print(f"\nDiversification: {results['diversification_warning']}")
+    print(f"\nCharts saved to: output/attribution_*.png")
+    print(f"Analysis saved to: {csv_path}")
 
 
 if __name__ == "__main__":

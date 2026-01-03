@@ -31,8 +31,14 @@ from .sensitivity_analysis import (
     plot_sensitivity_heatmap,
     plot_stock_stability
 )
+from .factor_attribution import (
+    run_factor_attribution,
+    plot_waterfall_attribution,
+    plot_correlation_matrix,
+    plot_sector_breakdown
+)
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 __all__ = [
     "get_constituents_at_date",
     "download_historical_constituents",

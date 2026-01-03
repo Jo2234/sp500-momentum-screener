@@ -26,8 +26,13 @@ from .monte_carlo import (
     plot_equity_curves,
     plot_distribution
 )
+from .sensitivity_analysis import (
+    run_sensitivity_analysis,
+    plot_sensitivity_heatmap,
+    plot_stock_stability
+)
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __all__ = [
     "get_constituents_at_date",
     "download_historical_constituents",

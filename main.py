@@ -34,6 +34,11 @@ from sp500_momentum.monte_carlo import (
     plot_equity_curves,
     plot_distribution
 )
+from sp500_momentum.sensitivity_analysis import (
+    run_sensitivity_analysis,
+    plot_sensitivity_heatmap,
+    plot_stock_stability
+)
 
 
 def run_screen_mode(args):
@@ -351,14 +356,17 @@ Examples:
   
   python main.py --mode monte-carlo
       Run Monte Carlo stress test on the current top 10 portfolio
+  
+  python main.py --mode sensitivity
+      Run parameter sensitivity analysis to test strategy robustness
         """
     )
     
     parser.add_argument(
         '--mode', '-m',
-        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis', 'monte-carlo'],
+        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis', 'monte-carlo', 'sensitivity'],
         required=True,
-        help="Operation mode: 'screen', 'backtest', 'multi-backtest', 'movement-analysis', or 'monte-carlo'"
+        help="Operation mode"
     )
     
     parser.add_argument(
@@ -434,6 +442,81 @@ Examples:
         run_movement_analysis_mode(args)
     elif args.mode == 'monte-carlo':
         run_monte_carlo_mode(args)
+    elif args.mode == 'sensitivity':
+        run_sensitivity_mode(args)
+
+
+def run_sensitivity_mode(args):
+    """Run parameter sensitivity analysis."""
+    analysis_year = date.today().year
+    
+    print("\n" + "="*70)
+    print("STRATEGY SENSITIVITY ANALYSIS")
+    print("="*70)
+    print("Testing strategy robustness across parameter variations...")
+    
+    # Run sensitivity analysis
+    results = run_sensitivity_analysis(
+        analysis_year=analysis_year,
+        lookback_variants=[3, 4, 5, 6],
+        top_n=args.top_n,
+        workers=args.workers,
+        show_progress=True
+    )
+    
+    # Generate visualizations
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Alpha heatmap
+    alpha_path = OUTPUT_DIR / f"sensitivity_alpha_{analysis_year}.png"
+    plot_sensitivity_heatmap(
+        results['results_df'],
+        metric='avg_alpha',
+        title=f"Sensitivity Analysis: Average Alpha ({analysis_year})",
+        save_path=str(alpha_path),
+        show=not args.no_show
+    )
+    
+    # Win rate heatmap
+    winrate_path = OUTPUT_DIR / f"sensitivity_winrate_{analysis_year}.png"
+    plot_sensitivity_heatmap(
+        results['results_df'],
+        metric='win_rate',
+        title=f"Sensitivity Analysis: Win Rate ({analysis_year})",
+        save_path=str(winrate_path),
+        show=not args.no_show
+    )
+    
+    # Sharpe heatmap
+    sharpe_path = OUTPUT_DIR / f"sensitivity_sharpe_{analysis_year}.png"
+    plot_sensitivity_heatmap(
+        results['results_df'],
+        metric='avg_sharpe',
+        title=f"Sensitivity Analysis: Average Sharpe Ratio ({analysis_year})",
+        save_path=str(sharpe_path),
+        show=not args.no_show
+    )
+    
+    # Stock stability chart
+    stability_path = OUTPUT_DIR / f"sensitivity_stocks_{analysis_year}.png"
+    plot_stock_stability(
+        results['stock_selection_matrix'],
+        title=f"Stock Selection Stability Across Parameter Variants ({analysis_year})",
+        save_path=str(stability_path),
+        show=not args.no_show
+    )
+    
+    # Save results to CSV
+    csv_path = OUTPUT_DIR / f"sensitivity_results_{analysis_year}.csv"
+    results['results_df'].to_csv(csv_path, index=False)
+    
+    print(f"\n\n{'='*70}")
+    print("SENSITIVITY ANALYSIS COMPLETE")
+    print(f"{'='*70}")
+    print(f"\nStability Score: {results['stability_score']}")
+    print(f"\nHigh-Conviction Stocks: {results['high_conviction_stocks']}")
+    print(f"\nCharts saved to: output/sensitivity_*.png")
+    print(f"Results saved to: {csv_path}")
 
 
 if __name__ == "__main__":

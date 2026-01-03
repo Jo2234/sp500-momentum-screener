@@ -21,8 +21,13 @@ from .visualization import (
     plot_portfolio_movement,
     plot_multi_year_movements
 )
+from .monte_carlo import (
+    run_monte_carlo,
+    plot_equity_curves,
+    plot_distribution
+)
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
     "get_constituents_at_date",
     "download_historical_constituents",

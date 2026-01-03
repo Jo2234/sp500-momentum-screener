@@ -29,6 +29,11 @@ from sp500_momentum.visualization import (
     plot_multi_year_movements,
     OUTPUT_DIR
 )
+from sp500_momentum.monte_carlo import (
+    run_monte_carlo,
+    plot_equity_curves,
+    plot_distribution
+)
 
 
 def run_screen_mode(args):
@@ -255,6 +260,77 @@ def run_movement_analysis_mode(args):
         print(f"Grid chart saved to: {grid_chart_path}")
 
 
+def run_monte_carlo_mode(args):
+    """Run Monte Carlo simulation for portfolio stress testing."""
+    print("\n" + "="*70)
+    print("MONTE CARLO STRESS TEST")
+    print("="*70)
+    
+    # First, get the current top 10 stocks
+    analysis_date = date.today()
+    
+    print(f"\nStep 1: Getting top {args.top_n} momentum stocks...")
+    top_stocks, benchmark_returns, summary_df = run_momentum_screen(
+        analysis_date=analysis_date,
+        lookback_years=args.lookback,
+        top_n=args.top_n,
+        workers=args.workers,
+        show_progress=True
+    )
+    
+    if not top_stocks:
+        print("No stocks passed the screening filter!")
+        return
+    
+    selected_tickers = [t[0] for t in top_stocks]
+    print(f"\nSelected stocks for simulation: {selected_tickers}")
+    
+    # Run Monte Carlo simulation
+    print(f"\nStep 2: Running Monte Carlo simulation...")
+    
+    n_simulations = args.simulations if hasattr(args, 'simulations') else 10000
+    
+    results = run_monte_carlo(
+        tickers=selected_tickers,
+        n_simulations=n_simulations,
+        n_days=252,
+        initial_investment=10000,
+        reference_year=analysis_date.year - 1,  # Use previous year's data
+        workers=args.workers,
+        show_progress=True
+    )
+    
+    # Generate visualizations
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Equity curves chart
+    curves_path = OUTPUT_DIR / f"monte_carlo_curves_{analysis_date.year}.png"
+    plot_equity_curves(
+        results['equity_curves'],
+        results['statistics'],
+        n_curves=100,
+        title=f"Monte Carlo Simulation: {analysis_date.year} Portfolio Projections",
+        save_path=str(curves_path),
+        show=not args.no_show
+    )
+    
+    # Distribution histogram
+    dist_path = OUTPUT_DIR / f"monte_carlo_distribution_{analysis_date.year}.png"
+    plot_distribution(
+        results['final_values'],
+        results['statistics'],
+        title=f"Monte Carlo Simulation: Distribution of {analysis_date.year} Outcomes",
+        save_path=str(dist_path),
+        show=not args.no_show
+    )
+    
+    print(f"\n\n{'='*70}")
+    print("MONTE CARLO SIMULATION COMPLETE")
+    print(f"{'='*70}")
+    print(f"Equity curves chart: {curves_path}")
+    print(f"Distribution chart: {dist_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="S&P 500 Momentum Stock Screener & Backtesting Engine",
@@ -272,14 +348,17 @@ Examples:
   
   python main.py --mode movement-analysis --years 2020 2021 2022 2023 2024
       Analyze daily portfolio movement with peak/drawdown markers
+  
+  python main.py --mode monte-carlo
+      Run Monte Carlo stress test on the current top 10 portfolio
         """
     )
     
     parser.add_argument(
         '--mode', '-m',
-        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis'],
+        choices=['screen', 'backtest', 'multi-backtest', 'movement-analysis', 'monte-carlo'],
         required=True,
-        help="Operation mode: 'screen', 'backtest', 'multi-backtest', or 'movement-analysis'"
+        help="Operation mode: 'screen', 'backtest', 'multi-backtest', 'movement-analysis', or 'monte-carlo'"
     )
     
     parser.add_argument(
@@ -317,6 +396,13 @@ Examples:
     )
     
     parser.add_argument(
+        '--simulations', '-s',
+        type=int,
+        default=10000,
+        help="Number of Monte Carlo simulations (default: 10,000)"
+    )
+    
+    parser.add_argument(
         '--no-show',
         action='store_true',
         help="Don't display charts (only save to files)"
@@ -346,6 +432,8 @@ Examples:
         run_multi_backtest_mode(args)
     elif args.mode == 'movement-analysis':
         run_movement_analysis_mode(args)
+    elif args.mode == 'monte-carlo':
+        run_monte_carlo_mode(args)
 
 
 if __name__ == "__main__":

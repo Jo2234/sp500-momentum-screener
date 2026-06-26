@@ -96,6 +96,8 @@ SP/
 
 ## Performance (10-Year Backtest: 2016-2025)
 
+These figures are a historical backtest over a specific period, not a live trading claim. Treat them as a research artifact to review for data quality, transaction costs, survivorship handling, and regime sensitivity before drawing any investment conclusion.
+
 | Metric | Value |
 |--------|-------|
 | Average Portfolio Return | 20.00% |

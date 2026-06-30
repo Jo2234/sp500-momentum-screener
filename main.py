@@ -20,7 +20,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from sp500_momentum.constituents import download_historical_constituents
 from sp500_momentum.strategy import run_momentum_screen
-from sp500_momentum.backtester import run_backtest, run_multi_year_backtest, calculate_daily_portfolio_values
+from sp500_momentum.backtester import (
+    run_backtest,
+    run_multi_year_backtest,
+    calculate_daily_portfolio_values,
+    create_backtest_manifest,
+    save_backtest_manifest,
+)
 from sp500_momentum.visualization import (
     plot_backtest_comparison,
     plot_multi_year_backtest,
@@ -113,10 +119,13 @@ def run_backtest_mode(args):
         lookback_years=args.lookback,
         top_n=args.top_n,
         workers=args.workers,
-        show_progress=True
+        show_progress=True,
+        transaction_cost_bps=args.transaction_cost_bps,
+        slippage_bps=args.slippage_bps,
     )
     
     if result.get('portfolio_return') is not None:
+        output_files = []
         # Generate visualization
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         chart_path = OUTPUT_DIR / f"backtest_{result['year']}.png"
@@ -128,6 +137,7 @@ def run_backtest_mode(args):
             save_path=str(chart_path),
             show=not args.no_show
         )
+        output_files.append(chart_path)
         
         # Also plot individual returns
         if result.get('individual_returns'):
@@ -138,12 +148,32 @@ def run_backtest_mode(args):
                 save_path=str(ind_chart_path),
                 show=not args.no_show
             )
+            output_files.append(ind_chart_path)
         
         # Save result to CSV
         if 'summary_df' in result and not result['summary_df'].empty:
             csv_path = OUTPUT_DIR / f"backtest_{result['year']}_stocks.csv"
             result['summary_df'].to_csv(csv_path, index=False)
+            output_files.append(csv_path)
             print(f"\nStock details saved to: {csv_path}")
+
+        manifest_path = args.manifest or (OUTPUT_DIR / f"backtest_{result['year']}_manifest.json")
+        manifest = create_backtest_manifest(
+            result,
+            parameters={
+                'mode': args.mode,
+                'start_date': args.start_date,
+                'lookback_years': args.lookback,
+                'top_n': args.top_n,
+                'workers': args.workers,
+                'transaction_cost_bps': args.transaction_cost_bps,
+                'slippage_bps': args.slippage_bps,
+            },
+            output_files=output_files,
+            command=' '.join(sys.argv),
+        )
+        save_backtest_manifest(manifest, manifest_path)
+        print(f"Backtest manifest saved to: {manifest_path}")
 
 
 def run_multi_backtest_mode(args):
@@ -164,7 +194,9 @@ def run_multi_backtest_mode(args):
         lookback_years=args.lookback,
         top_n=args.top_n,
         workers=args.workers,
-        show_progress=True
+        show_progress=True,
+        transaction_cost_bps=args.transaction_cost_bps,
+        slippage_bps=args.slippage_bps,
     )
     
     if not results_df.empty:
@@ -184,6 +216,34 @@ def run_multi_backtest_mode(args):
         csv_path = OUTPUT_DIR / f"multi_backtest_{years_str}.csv"
         results_df.to_csv(csv_path, index=False)
         print(f"\nResults saved to: {csv_path}")
+
+        manifest_path = args.manifest or (OUTPUT_DIR / f"multi_backtest_{years_str}_manifest.json")
+        manifest = create_backtest_manifest(
+            {
+                'start_date': date(min(years), 1, 1),
+                'end_date': date(max(years) + 1, 1, 1),
+                'year': years_str,
+                'selected_stocks': [],
+                'portfolio_return': results_df['Portfolio_Return'].mean(),
+                'benchmark_return': results_df['Benchmark_Return'].mean(),
+                'alpha': results_df['Alpha'].mean(),
+                'individual_returns': {},
+                'selection_returns': {},
+            },
+            parameters={
+                'mode': args.mode,
+                'years': years,
+                'lookback_years': args.lookback,
+                'top_n': args.top_n,
+                'workers': args.workers,
+                'transaction_cost_bps': args.transaction_cost_bps,
+                'slippage_bps': args.slippage_bps,
+            },
+            output_files=[chart_path, csv_path],
+            command=' '.join(sys.argv),
+        )
+        save_backtest_manifest(manifest, manifest_path)
+        print(f"Backtest manifest saved to: {manifest_path}")
 
 
 def run_movement_analysis_mode(args):
@@ -420,6 +480,26 @@ Examples:
         type=int,
         default=10,
         help="Number of parallel workers for data fetching (default: 10)"
+    )
+
+    parser.add_argument(
+        '--transaction-cost-bps',
+        type=float,
+        default=0.0,
+        help="Per-side transaction/commission cost in basis points for backtests (default: 0)"
+    )
+
+    parser.add_argument(
+        '--slippage-bps',
+        type=float,
+        default=0.0,
+        help="Per-side slippage estimate in basis points for backtests (default: 0)"
+    )
+
+    parser.add_argument(
+        '--manifest',
+        type=Path,
+        help="Optional path for the reproducible backtest manifest JSON"
     )
     
     parser.add_argument(

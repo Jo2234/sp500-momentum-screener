@@ -14,7 +14,15 @@ from .strategy import (
     select_top_stocks,
     run_momentum_screen
 )
-from .backtester import run_backtest, calculate_portfolio_return, calculate_daily_portfolio_values
+from .backtester import (
+    run_backtest,
+    calculate_portfolio_return,
+    calculate_daily_portfolio_values,
+    apply_round_trip_costs,
+    calculate_holding_period_end,
+    create_backtest_manifest,
+    save_backtest_manifest,
+)
 from .visualization import (
     plot_backtest_comparison,
     plot_multi_year_backtest,
@@ -45,7 +53,7 @@ from .oos_validation import (
     plot_regime_analysis
 )
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 __all__ = [
     "get_constituents_at_date",
     "download_historical_constituents",
@@ -59,6 +67,10 @@ __all__ = [
     "run_momentum_screen",
     "run_backtest",
     "calculate_portfolio_return",
+    "apply_round_trip_costs",
+    "calculate_holding_period_end",
+    "create_backtest_manifest",
+    "save_backtest_manifest",
     "plot_backtest_comparison",
     "plot_multi_year_backtest",
 ]
